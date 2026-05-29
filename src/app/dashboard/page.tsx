@@ -22,18 +22,22 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!user) return
-    Promise.all([
+    Promise.allSettled([
       getEventsByOwner(user.uid),
       getAttendingEventIds(user.uid).then(ids => getEventsByIds(ids)),
-      getUnreadNotifications(user.uid).catch(() => [] as typeof notifications),
-      isAdmin(user.uid).catch(() => false),
-    ]).then(([owned, attending, notifs, adminStatus]) => {
-      setOwnedEvents(owned)
-      setAttendingEvents(attending.filter(e => e.createdBy !== user.uid))
-      setNotifications(notifs)
-      setUserIsAdmin(adminStatus)
+      getUnreadNotifications(user.uid),
+      isAdmin(user.uid),
+    ]).then(([owned, attending, notifs, admin]) => {
+      setOwnedEvents(owned.status === 'fulfilled' ? owned.value : [])
+      setAttendingEvents(
+        attending.status === 'fulfilled'
+          ? attending.value.filter(e => e.createdBy !== user.uid)
+          : []
+      )
+      setNotifications(notifs.status === 'fulfilled' ? notifs.value : [])
+      setUserIsAdmin(admin.status === 'fulfilled' ? admin.value : false)
       setLoading(false)
-    }).catch(() => setLoading(false))
+    })
   }, [user])
 
   const dismissNotification = async (notif: NotificationData) => {
