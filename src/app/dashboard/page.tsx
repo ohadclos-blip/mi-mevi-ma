@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context'
 import { getEventsByOwner, getEventsByIds, EventData } from '@/lib/firestore/events'
 import { getAttendingEventIds } from '@/lib/firestore/users'
 import { getUnreadNotifications, markNotificationRead, NotificationData } from '@/lib/firestore/notifications'
+import { isAdmin } from '@/lib/firestore/admin'
 
 export default function DashboardPage() {
   const { user, signOut } = useAuth()
@@ -17,6 +18,7 @@ export default function DashboardPage() {
   const [attendingEvents, setAttendingEvents] = useState<EventData[]>([])
   const [loading,        setLoading]        = useState(true)
   const [notifications,  setNotifications]  = useState<NotificationData[]>([])
+  const [userIsAdmin,    setUserIsAdmin]    = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -24,10 +26,12 @@ export default function DashboardPage() {
       getEventsByOwner(user.uid),
       getAttendingEventIds(user.uid).then(ids => getEventsByIds(ids)),
       getUnreadNotifications(user.uid),
-    ]).then(([owned, attending, notifs]) => {
+      isAdmin(user.uid),
+    ]).then(([owned, attending, notifs, adminStatus]) => {
       setOwnedEvents(owned)
       setAttendingEvents(attending.filter(e => e.createdBy !== user.uid))
       setNotifications(notifs)
+      setUserIsAdmin(adminStatus)
       setLoading(false)
     })
   }, [user])
@@ -54,12 +58,22 @@ export default function DashboardPage() {
             <p className="text-xs text-gray-500">{user?.email}</p>
           </div>
         </div>
-        <button
-          onClick={handleSignOut}
-          className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-        >
-          יציאה
-        </button>
+        <div className="flex items-center gap-3">
+          {userIsAdmin && (
+            <Link
+              href="/admin"
+              className="text-xs font-medium px-2.5 py-1 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            >
+              Admin
+            </Link>
+          )}
+          <button
+            onClick={handleSignOut}
+            className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            יציאה
+          </button>
+        </div>
       </div>
 
       {/* Notification banners */}
