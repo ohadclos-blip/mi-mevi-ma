@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Plus } from 'lucide-react'
+import { ChevronLeft, Plus, X } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { getEventsByOwner, getEventsByIds, EventData } from '@/lib/firestore/events'
 import { getAttendingEventIds } from '@/lib/firestore/users'
+import { getUnreadNotifications, markNotificationRead, NotificationData } from '@/lib/firestore/notifications'
 
 export default function DashboardPage() {
   const { user, signOut } = useAuth()
@@ -15,18 +16,26 @@ export default function DashboardPage() {
   const [ownedEvents,    setOwnedEvents]    = useState<EventData[]>([])
   const [attendingEvents, setAttendingEvents] = useState<EventData[]>([])
   const [loading,        setLoading]        = useState(true)
+  const [notifications,  setNotifications]  = useState<NotificationData[]>([])
 
   useEffect(() => {
     if (!user) return
     Promise.all([
       getEventsByOwner(user.uid),
       getAttendingEventIds(user.uid).then(ids => getEventsByIds(ids)),
-    ]).then(([owned, attending]) => {
+      getUnreadNotifications(user.uid),
+    ]).then(([owned, attending, notifs]) => {
       setOwnedEvents(owned)
       setAttendingEvents(attending.filter(e => e.createdBy !== user.uid))
+      setNotifications(notifs)
       setLoading(false)
     })
   }, [user])
+
+  const dismissNotification = async (notif: NotificationData) => {
+    await markNotificationRead(user!.uid, notif.id)
+    setNotifications(prev => prev.filter(n => n.id !== notif.id))
+  }
 
   const handleSignOut = async () => {
     await signOut()
@@ -52,6 +61,38 @@ export default function DashboardPage() {
           יציאה
         </button>
       </div>
+
+      {/* Notification banners */}
+      {notifications.length > 0 && (
+        <div className="space-y-2 mb-6">
+          {notifications.map(notif => (
+            <div
+              key={notif.id}
+              className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3"
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-blue-800">האירוע הוקפא אוטומטית</p>
+                <p className="text-xs text-blue-600 mt-0.5 truncate">
+                  &ldquo;{notif.eventName}&rdquo; — התאריך עבר
+                </p>
+                <Link
+                  href={`/dashboard/events/${notif.eventId}`}
+                  className="text-xs font-medium text-blue-700 underline mt-1 inline-block"
+                  onClick={() => dismissNotification(notif)}
+                >
+                  צפה באירוע
+                </Link>
+              </div>
+              <button
+                onClick={() => dismissNotification(notif)}
+                className="text-blue-400 hover:text-blue-600 flex-shrink-0 mt-0.5"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <Link
         href="/dashboard/events/new"

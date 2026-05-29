@@ -4,9 +4,13 @@ import {
   getDoc,
   getDocs,
   updateDoc,
+  addDoc,
   query,
   orderBy,
+  limit,
+  serverTimestamp,
   getFirestore,
+  Timestamp,
 } from 'firebase/firestore'
 import { getFirebaseApp } from '../firebase'
 
@@ -20,6 +24,16 @@ export interface AdminUserData {
   email:       string | null
   isDeleted:   boolean
   createdAt:   { seconds: number } | null
+}
+
+export interface AuditEntry {
+  id:         string
+  action:     string
+  adminUid:   string
+  adminEmail: string | null
+  targetId:   string
+  details:    string
+  createdAt:  Timestamp
 }
 
 export async function isAdmin(uid: string): Promise<boolean> {
@@ -40,10 +54,38 @@ export async function getAllUsers(): Promise<AdminUserData[]> {
   return snap.docs.map(d => ({ uid: d.id, ...d.data() }) as AdminUserData)
 }
 
-export async function adminSetUserDeleted(uid: string, isDeleted: boolean): Promise<void> {
-  await updateDoc(doc(db(), 'users', uid), { isDeleted })
+export async function getAuditLog(count = 100): Promise<AuditEntry[]> {
+  const snap = await getDocs(
+    query(collection(db(), 'audit_log'), orderBy('createdAt', 'desc'), limit(count))
+  )
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as AuditEntry)
 }
 
-export async function adminSetEventStatus(eventId: string, status: string): Promise<void> {
+async function writeAuditLog(
+  adminUid: string,
+  adminEmail: string | null,
+  action: string,
+  targetId: string,
+  details: string,
+) {
+  await addDoc(collection(db(), 'audit_log'), {
+    action, adminUid, adminEmail, targetId, details,
+    createdAt: serverTimestamp(),
+  })
+}
+
+export async function adminSetUserDeleted(
+  uid: string, isDeleted: boolean,
+  adminUid: string, adminEmail: string | null,
+): Promise<void> {
+  await updateDoc(doc(db(), 'users', uid), { isDeleted })
+  await writeAuditLog(adminUid, adminEmail, isDeleted ? 'user_deleted' : 'user_restored', uid, '')
+}
+
+export async function adminSetEventStatus(
+  eventId: string, status: string,
+  adminUid: string, adminEmail: string | null,
+): Promise<void> {
   await updateDoc(doc(db(), 'events', eventId), { status })
+  await writeAuditLog(adminUid, adminEmail, `event_${status}`, eventId, '')
 }

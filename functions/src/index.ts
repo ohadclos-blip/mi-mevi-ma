@@ -19,9 +19,27 @@ export const dailyEventLifecycle = onSchedule(
     if (snap.empty) return
 
     const batch = db.batch()
-    snap.docs.forEach(doc => batch.update(doc.ref, { status: 'frozen' }))
-    await batch.commit()
 
-    console.log(`Auto-frozen ${snap.size} event(s)`)
+    for (const eventDoc of snap.docs) {
+      batch.update(eventDoc.ref, { status: 'frozen' })
+
+      const { createdBy, name } = eventDoc.data() as { createdBy: string; name: string }
+      const notifRef = db
+        .collection('notifications')
+        .doc(createdBy)
+        .collection('items')
+        .doc()
+
+      batch.set(notifRef, {
+        eventId:   eventDoc.id,
+        eventName: name,
+        type:      'auto_frozen',
+        read:      false,
+        createdAt: now,
+      })
+    }
+
+    await batch.commit()
+    console.log(`Auto-frozen ${snap.size} event(s) and wrote notifications`)
   },
 )
