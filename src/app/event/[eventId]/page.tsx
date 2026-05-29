@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Check, Plus, X } from 'lucide-react'
-import { getAuth } from 'firebase/auth'
+import { getAuth, signInWithPopup } from 'firebase/auth'
+import { getFunctions, httpsCallable } from 'firebase/functions'
 import { getFirebaseApp, googleProvider } from '@/lib/firebase'
-import { signInWithPopup } from 'firebase/auth'
 import {
   getEvent,
   EventData,
@@ -372,12 +372,9 @@ function BlockedScreen({ event, eventId }: { event: EventData; eventId: string }
     setContactError(false)
     try {
       await addContactMessage(eventId, name, message)
-      // Fire-and-forget email — don't block UI on email success
-      fetch('/api/contact-organizer', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ eventId, name, message }),
-      }).catch(() => {})
+      // Fire-and-forget email via Cloud Function
+      const fn = httpsCallable(getFunctions(getFirebaseApp()), 'sendContactEmail')
+      fn({ eventId, name, message }).catch(() => {})
       setSent(true)
     } catch {
       setContactError(true)
