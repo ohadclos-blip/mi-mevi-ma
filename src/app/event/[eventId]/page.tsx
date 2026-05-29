@@ -372,6 +372,12 @@ function BlockedScreen({ event, eventId }: { event: EventData; eventId: string }
     setContactError(false)
     try {
       await addContactMessage(eventId, name, message)
+      // Fire-and-forget email — don't block UI on email success
+      fetch('/api/contact-organizer', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ eventId, name, message }),
+      }).catch(() => {})
       setSent(true)
     } catch {
       setContactError(true)
