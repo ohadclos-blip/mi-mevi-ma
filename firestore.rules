@@ -1,0 +1,68 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+          && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /events/{eventId} {
+      allow read: if isAdmin()
+                  || resource.data.status in ['active', 'frozen']
+                  || (request.auth != null && request.auth.uid == resource.data.createdBy);
+      allow create: if request.auth != null
+                    && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAdmin()
+                    || (request.auth != null && resource.data.createdBy == request.auth.uid);
+      allow delete: if false;
+    }
+
+    match /events/{eventId}/items/{itemId} {
+      function eventData() {
+        return get(/databases/$(database)/documents/events/$(eventId)).data;
+      }
+      allow read: if eventData().status in ['active', 'frozen'];
+      allow create: if eventData().status == 'active'
+                    || (request.auth != null && request.auth.uid == eventData().createdBy
+                        && eventData().status != 'deleted');
+      allow update: if eventData().status == 'active'
+                    && (
+                      // Organizer can change anything
+                      (request.auth != null && request.auth.uid == eventData().createdBy)
+                      // Guests may only change claim counters, not item structure
+                      || (request.resource.data.name         == resource.data.name
+                          && request.resource.data.quantity      == resource.data.quantity
+                          && request.resource.data.addedBy       == resource.data.addedBy
+                          && request.resource.data.addedByNickname == resource.data.addedByNickname)
+                    );
+      allow delete: if false;
+    }
+
+    match /events/{eventId}/items/{itemId}/claims/{claimId} {
+      allow read:   if get(/databases/$(database)/documents/events/$(eventId))
+                      .data.status in ['active', 'frozen'];
+      allow create: if get(/databases/$(database)/documents/events/$(eventId))
+                      .data.status == 'active';
+      allow delete: if get(/databases/$(database)/documents/events/$(eventId))
+                      .data.status == 'active';
+    }
+
+    match /events/{eventId}/contacts/{contactId} {
+      allow read:   if request.auth != null
+                    && request.auth.uid == get(/databases/$(database)/documents/events/$(eventId)).data.createdBy;
+      allow create: if get(/databases/$(database)/documents/events/$(eventId))
+                      .data.status == 'blocked';
+    }
+
+    match /users/{userId} {
+      allow read:  if isAdmin() || (request.auth != null && request.auth.uid == userId);
+      allow write: if request.auth != null && request.auth.uid == userId;
+      allow update: if isAdmin();
+    }
+  }
+}
