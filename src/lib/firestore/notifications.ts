@@ -5,7 +5,6 @@ import {
   updateDoc,
   query,
   where,
-  orderBy,
   getFirestore,
   Timestamp,
 } from 'firebase/firestore'
@@ -29,7 +28,6 @@ export async function getUnreadNotifications(uid: string): Promise<NotificationD
     query(
       collection(db(), 'notifications', uid, 'items'),
       where('read', '==', false),
-      orderBy('createdAt', 'desc'),
     )
   )
   return snap.docs.map(d => ({ id: d.id, ...d.data() }) as NotificationData)

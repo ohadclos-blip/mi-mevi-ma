@@ -25,15 +25,15 @@ export default function DashboardPage() {
     Promise.all([
       getEventsByOwner(user.uid),
       getAttendingEventIds(user.uid).then(ids => getEventsByIds(ids)),
-      getUnreadNotifications(user.uid),
-      isAdmin(user.uid),
+      getUnreadNotifications(user.uid).catch(() => [] as typeof notifications),
+      isAdmin(user.uid).catch(() => false),
     ]).then(([owned, attending, notifs, adminStatus]) => {
       setOwnedEvents(owned)
       setAttendingEvents(attending.filter(e => e.createdBy !== user.uid))
       setNotifications(notifs)
       setUserIsAdmin(adminStatus)
       setLoading(false)
-    })
+    }).catch(() => setLoading(false))
   }, [user])
 
   const dismissNotification = async (notif: NotificationData) => {
